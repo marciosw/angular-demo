@@ -1,4 +1,4 @@
-name: Deploy Cloud Run
+name: Deploy Cloud Run Tutorial
 
 on: [push]
 
