@@ -1,0 +1,172 @@
+My actions
+
+name: Deploy Cloud Run
+
+on: [push]
+
+jobs: 
+  testing-action:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: pulumi # No longer strictly needed here
+    steps: 
+      - uses: actions/checkout@v3
+
+      - uses: actions/setup-node@v3
+        with:
+          node-version: 16
+
+      - name: "Authenticate with GCP Service Account"
+        uses: google-github-actions/auth@v1
+        with:
+          credentials_json: ${{ secrets.GCP_DEPLOY_KEY }}  
+
+      - name: "setup GCP"
+        uses: "google-github-actions/setup-gcloud@v1"
+
+      # --- Pulumi Specific Setup ---
+      - name: Install Pulumi dependencies
+        working-directory: ./pulumi  # Set working directory here
+        run: npm install
+
+      - name: Configure Pulumi CLI 
+        uses: pulumi/setup-pulumi@v2
+
+      - name: Pulumi Up
+        working-directory: ./pulumi  # Set working directory here
+        run: pulumi up --yes --stack marciosw/quickstart/devlinux
+        env: 
+          PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_TOKEN }}
+
+My pulumi index.ts
+
+// Copyright 2016-2020, Pulumi Corporation.  All rights reserved.
+
+import * as docker from "@pulumi/docker";
+import * as gcp from "@pulumi/gcp";
+import * as pulumi from "@pulumi/pulumi";
+
+// Location to deploy Cloud Run services
+//const location = gcp.config.region || "us-central1";
+const location = "us-central1";
+
+// -------------------------------------- //
+// Deploy a custom container to Cloud Run //
+// -------------------------------------- //
+
+// Build a Docker image from our sample Ruby app and put it to Google Container Registry.
+// Note: Run `gcloud auth configure-docker` in your command line to configure auth to GCR.
+
+const imageName = "tutorial";
+const config = new pulumi.Config();
+const cred = config.require("gcp_credential");
+console.log(cred);
+const provider = new gcp.Provider("GCP", {
+    credentials: cred,
+    project: gcp.config.project
+})
+
+const myImage = new docker.Image(imageName, {
+    imageName: pulumi.interpolate`gcr.io/${gcp.config.project}/${imageName}:latest`,
+    build: {
+        context: "../",
+        platform: "linux/amd64",
+    },
+});
+
+// Deploy to Cloud Run. Some extra parameters like concurrency and memory are set for illustration purpose.
+const angularService = new gcp.cloudrun.Service("angular", {
+    location,
+    template: {
+        spec: {
+            containers: [{
+                image: myImage.imageName,
+                resources: {
+                    limits: {
+                        memory: "1Gi",
+                    },
+                },
+            }],
+            containerConcurrency: 50,
+        },
+    },
+},{
+    provider: provider
+});
+
+
+// Open the service to public unrestricted access
+const iamAgular = new gcp.cloudrun.IamMember("angular", {
+    service: angularService.name,
+    location,
+    role: "roles/run.invoker",
+    member: "allUsers",
+},{
+    provider: provider
+});
+
+// Export the URL
+export const angularUrl = angularService.statuses[0].url;
+
+
+
+
+Im having this error:
+
+@ Updating.....
+ +  docker:index:Image tutorial creating (37s) digest: sha256:181514574ee237674d8d4e1517e97fb562c9bbfd8182a58f565156bb89cb033e
+ +  docker:index:Image tutorial creating (37s) digest: sha256:1fe990d6c49e16f5fcfc4943a796eec9d3e71d8dae6209d26ad424ff742df8ce
+@ Updating........
+ +  docker:index:Image tutorial creating (42s) exporting layers
+ +  docker:index:Image tutorial creating (42s) writing image sha256:84161057a61d0dd5ee0bbf399995c7daaf63f6883551318a8da92c480928355f
+ +  docker:index:Image tutorial creating (42s) writing image sha256:84161057a61d0dd5ee0bbf399995c7daaf63f6883551318a8da92c480928355f
+ +  docker:index:Image tutorial creating (42s) naming to gcr.io/udemyiactraining-429511/tutorial:latest
+ +  docker:index:Image tutorial creating (42s) digest: sha256:1fe990d6c49e16f5fcfc4943a796eec9d3e71d8dae6209d26ad424ff742df8ce
+ +  docker:index:Image tutorial creating (42s) Built image with ID sha256:84161057a61d0dd5ee0bbf399995c7daaf63f6883551318a8da92c480928355f
+ +  docker:index:Image tutorial creating (42s) Built image with local id "sha256:84161057a61d0dd5ee0bbf399995c7daaf63f6883551318a8da92c480928355f", polling image store for image
+ +  docker:index:Image tutorial creating (42s) Image built successfully, local id "sha256:84161057a61d0dd5ee0bbf399995c7daaf63f6883551318a8da92c480928355f"
+ +  docker:index:Image tutorial creating (42s) Pushing Image to the registry
+ +  docker:index:Image tutorial creating (42s) The push refers to repository [gcr.io/udemyiactraining-429511/tutorial]
+ +  docker:index:Image tutorial creating (42s) Preparing
+ +  docker:index:Image tutorial creating (42s) Preparing
+ +  docker:index:Image tutorial creating (42s) Preparing
+ +  docker:index:Image tutorial creating (42s) Preparing
+ +  docker:index:Image tutorial creating (42s) Preparing
+ +  docker:index:Image tutorial creating (42s) Preparing
+ +  docker:index:Image tutorial creating (42s) Preparing
+ +  docker:index:Image tutorial creating (42s) Preparing
+ +  docker:index:Image tutorial creating (42s) Waiting
+ +  docker:index:Image tutorial creating (42s) Waiting
+ +  docker:index:Image tutorial creating (42s) Waiting
+ +  docker:index:Image tutorial creating (42s) error: error reading push output: denied: Unauthenticated request. Unauthenticated requests do not have permission "artifactregistry.repositories.uploadArtifacts" on resource "projects/udemyiactraining-429511/locations/us/repositories/gcr.io" (or it may not exist)
+ +  docker:index:Image tutorial **creating failed** error: error reading push output: denied: Unauthenticated request. Unauthenticated requests do not have permission "artifactregistry.repositories.uploadArtifacts" on resource "projects/udemyiactraining-429511/locations/us/repositories/gcr.io" (or it may not exist)
+    pulumi:pulumi:Stack quickstart-devlinux running error: update failed
+    pulumi:pulumi:Stack quickstart-devlinux **failed** 1 error; 13 messages
+Diagnostics:
+  docker:index:Image (tutorial):
+    error: error reading push output: denied: Unauthenticated request. Unauthenticated requests do not have permission "artifactregistry.repositories.uploadArtifacts" on resource "projects/udemyiactraining-429511/locations/us/repositories/gcr.io" (or it may not exist)
+  pulumi:pulumi:Stack (quickstart-devlinux):
+    ***
+        ***
+        ***
+        ***
+        ***
+        ***
+        ***
+        ***
+        ***
+        ***
+        ***
+        ***
+    ***
+    error: update failed
+Resources:
+    2 unchanged
+Duration: 46s
+Error: Process completed with exit code 255.
+0s
+Post job cleanup.
+Removed exported credentials at "/home/runner/work/sample-pulumi/sample-pulumi/gha-creds-23deddc88a1e4b5a.json".
+
+

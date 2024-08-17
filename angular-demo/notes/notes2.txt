@@ -1,0 +1,38 @@
+name: Deploy Cloud Run
+
+on: [push]
+
+jobs: 
+  testing-action:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: pulumi # No longer strictly needed here
+    steps: 
+      - uses: actions/checkout@v3
+
+      - uses: actions/setup-node@v3
+        with:
+          node-version: 16
+
+      - name: "Authenticate with GCP Service Account"
+        uses: google-github-actions/auth@v1
+        with:
+          credentials_json: ${{ secrets.GCP_DEPLOY_KEY }}  
+
+      - name: "setup GCP"
+        uses: "google-github-actions/setup-gcloud@v1"
+
+      # --- Pulumi Specific Setup ---
+      - name: Install Pulumi dependencies
+        working-directory: ./pulumi  # Set working directory here
+        run: npm install
+
+      - name: Configure Pulumi CLI 
+        uses: pulumi/setup-pulumi@v2
+
+      - name: Pulumi Up
+        working-directory: ./pulumi  # Set working directory here
+        run: pulumi up --yes --stack marciosw/quickstart/devlinux
+        env: 
+          PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_TOKEN }}
