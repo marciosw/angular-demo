@@ -3,11 +3,8 @@ name: Deploy Cloud Run Tutorial
 on: [push]
 
 jobs: 
-
   testing-action:
-
     runs-on: ubuntu-latest
-
     steps: 
       - uses: actions/checkout@v3
 
@@ -22,6 +19,10 @@ jobs:
       
       - name: "setup GCP"
         uses: "google-github-actions/setup-gcloud@v1"
+
+      - name: Configure Docker authentication
+        run: |-
+          gcloud auth configure-docker
 
       - name: "exec pulumi" 
         uses: pulumi/actions@v3
