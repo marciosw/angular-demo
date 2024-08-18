@@ -12,8 +12,6 @@ jobs:
         with:
           node-version: 16
 
-      - name: "Executando deploy"
-
       - name: "auth GCP"
         uses: "google-github-actions/auth@v1"
         with: 
