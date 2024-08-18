@@ -20,9 +20,6 @@ jobs:
         with: 
           credentials_json: "${{ secrets.GCP_KEY }}"
       
-      - name: "Print Authentication Success"
-        run: echo "Authentication Successful! Service account: ${{secrets.GCP_DEPLOY_KEY}}"
-
       - name: "setup GCP"
         uses: "google-github-actions/setup-gcloud@v1"
 
