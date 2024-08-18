@@ -19,6 +19,7 @@ jobs:
         uses: "google-github-actions/auth@v1"
         with: 
           credentials_json: "${{ secrets.GCP_KEY }}"
+        run: echo "::set-output name=auth-output::Successfully authenticated with service account."
 
       - name: "setup GCP"
         uses: "google-github-actions/setup-gcloud@v1"
